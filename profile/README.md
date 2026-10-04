@@ -5,14 +5,14 @@
 
 magmacrunch media is a creative collective that produces music, film, video games, web tools, writing, and more. Based across the United States, the collective was founded in 2023 as an independent record label and continues to branch out into other areas of art and technology.
 
-<h3 align="left">where the work is</h3>
+<h3 align="left">what we make</h3>
 
-Most repositories here are private, so this page is a better map of the collective than the repository list is. Almost everything we make is free to use and needs no account:
+- **[the arcade](https://magmacrunch.com/arcade/)** — over twenty games you can play in a browser. Board games, card games, puzzles, action games. A few also run in a terminal or on a Wii.
+- **[ware](https://magmacrunch.com/ware/)** — browser tools: a sprite editor, an image signal chain, an album art maker, a media search. This section also documents the engines behind the games.
+- **[the archive](https://magmacrunch.com/archive/)** — recordings, releases, works, places, and the people who made them.
+- **[music](https://magmacrunch.com/music/)** and **[visual](https://magmacrunch.com/visual/)** — records, music videos, and design work.
 
-- **[the arcade](https://magmacrunch.com/arcade/)** — more than twenty games that run in a browser. Board games, card games, puzzles and action games, no install and nothing to sign up for. Several also run in a terminal, and a few on a Wii.
-- **[ware](https://magmacrunch.com/ware/)** — creative tools that also run in the browser: a sprite editor, an image signal chain, an album art maker, a media search. The same section documents the engines the games are built on, including the ones whose source is not public.
-- **[the archive](https://magmacrunch.com/archive/)** — recordings, releases, works, places and the people behind them, for the label and the artists around it.
-- **[music](https://magmacrunch.com/music/)** and **[visual](https://magmacrunch.com/visual/)** — the records themselves, music videos, and the design work.
+All of it is free, and none of it needs an account.
 
 <h3 align="left">install</h3>
 
@@ -23,13 +23,13 @@ pip install texastoast      # a Python RPG engine
 brew install magmacrunch-media/tap/magmascript
 ```
 
-Seven `@magmacrunch/adenosine-*` packages are published on [npm](https://www.npmjs.com/org/magmacrunch); they are the engines under the web arcade, and they are usable on their own.
+Seven `@magmacrunch/adenosine-*` packages on [npm](https://www.npmjs.com/org/magmacrunch) are the engines behind the web arcade.
 
 <h3 align="left">source</h3>
 
-Most of this organization is private. That is a licensing choice rather than a secret: the games and tools stay free to play and free to use, and the engines are documented in [ware](https://magmacrunch.com/ware/) whether or not their source is published.
+Most repositories here are private. The games and tools are still free, and the engines are each written up in [ware](https://magmacrunch.com/ware/).
 
-For source access, licensing, collaboration, press, or anything else, write to **[info@magmacrunch.com](mailto:info@magmacrunch.com)**.
+For source access, licensing, press, or anything else: **[info@magmacrunch.com](mailto:info@magmacrunch.com)**
 
 - [magmacrunch.com](https://magmacrunch.com)
 - [Bandcamp](https://magmacrunch.bandcamp.com/) / [Spotify](https://open.spotify.com/playlist/7IUU00YYlHLDBTC7tvXNEY) / [SoundCloud](https://soundcloud.com/magmacrunch)
