@@ -27,7 +27,7 @@ Seven `@magmacrunch/adenosine-*` packages on [npm](https://www.npmjs.com/org/mag
 
 <h3 align="left">source</h3>
 
-Most repositories here are private. The games and tools are still free, and the engines are each written up in [ware](https://magmacrunch.com/ware/).
+Most of the org's repositories are private. The games and tools are still free, and the engines are each written up in [ware](https://magmacrunch.com/ware/).
 
 For source access, licensing, press, or anything else: **[info@magmacrunch.com](mailto:info@magmacrunch.com)**
 
