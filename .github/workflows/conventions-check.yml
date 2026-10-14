@@ -96,7 +96,7 @@ jobs:
         if: ${{ !inputs.skip-em-dash }}
         shell: bash
         env:
-          EXCLUDE_PATHS: ${{ inputs.exclude-paths }}
+          EXCLUDE_PATHS: ${{ inputs['exclude-paths'] }}
         run: |
           set -euo pipefail
           base='${{ steps.range.outputs.base }}'
@@ -184,7 +184,7 @@ jobs:
       - name: Nothing added with CRLF in the index
         shell: bash
         env:
-          EXCLUDE_PATHS: ${{ inputs.exclude-paths }}
+          EXCLUDE_PATHS: ${{ inputs['exclude-paths'] }}
         run: |
           set -euo pipefail
           base='${{ steps.range.outputs.base }}'
