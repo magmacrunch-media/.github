@@ -48,21 +48,9 @@ on:
         type: boolean
         default: false
       exclude-paths:
-        description: >
-          Whitespace separated git pathspecs excluded from the em dash and CRLF
-          checks. For GENERATED or SYNCED content only, where the text comes
-          from somewhere else and nobody here typed it.
-          Measured on magmacrunch.com 2026-10-13: ELEVEN workflows in that repo
-          commit and push generated content, and search-index.json alone holds
-          465 lines with an em dash, theme-audit.json 40,
-          ware/crunch-c/lessons.js 58, and 192 files under archive/by-artist/.
-          Without this the check would fail most of that repo's automation on
-          content derived from MusicBrainz and from other repos.
-          Keep the list to things that are regenerated. Excluding a hand edited
-          file turns this check off for the place it is most needed, which is
-          the opposite of the point.
+        description: Whitespace separated git pathspecs to exclude. Generated content only.
         type: string
-        default: ""
+        default: ''
 
 permissions:
   contents: read
