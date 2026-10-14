@@ -100,10 +100,30 @@ jobs:
           # back catalogue holds 8,848 em dashes across 651 markdown files; a
           # sweep would rewrite all of them to fix nothing anybody reads, and
           # would do it straight into the CRLF traps in CLAUDE.md.
+          # BRACKETED, in BOTH greps, and that is the whole point of this line.
+          # The first version used `grep -E '^\+' | grep -v '^\+\+\+'`, and the
+          # second grep has no -E, so it is a BASIC regex, where GNU grep reads
+          # backslash-plus as the one-or-more QUANTIFIER rather than a literal
+          # plus. It therefore matched effectively every line and -v threw them
+          # all away. The step reported "Examined 0 added line(s)" on a commit
+          # that added 215 and PASSED. A character class means the same thing in
+          # both dialects, so there is nothing left to get wrong.
           added="$(git diff --unified=0 "$base" "$head" -- . \
-                   | grep -E '^\+' | grep -v '^\+\+\+' || true)"
+                   | grep -E '^[+]' | grep -vE '^[+][+][+]' || true)"
           n="$(printf '%s' "$added" | grep -c '' || true)"
           echo "Examined $n added line(s)."
+
+          # AND THE GUARD, which is what should have caught the above and was
+          # missing from this step while the commit-message step below had it.
+          # A commit that changes a file always adds or removes lines, so zero
+          # added lines alongside changed files means the filter broke, not that
+          # the work is clean. This is the "a broken scan cannot read as a clean
+          # pass" rule, and its absence here is exactly how it read as one.
+          changed="$(git diff --name-only "$base" "$head" | grep -c '' || true)"
+          if [ "$n" = 0 ] && [ "$changed" != 0 ]; then
+            echo "::error::$changed file(s) changed but 0 added lines were found. The diff filter is broken; this check examined nothing."
+            exit 1
+          fi
 
           # BUILT, never spelled. An editor tool renders a backslash-u escape
           # AS the literal dash, which put one into this very file and would
@@ -155,6 +175,14 @@ jobs:
           # file's committed form is rather than hardcoding a list.
           files="$(git diff --name-only --diff-filter=ACM "$base" "$head" || true)"
           n="$(printf '%s' "$files" | grep -c '' || true)"
+          # Same guard as the other two steps. A range with commits in it that
+          # yields no added or modified files means the range or the filter is
+          # wrong, not that nothing happened.
+          if [ "$n" = 0 ] && [ "$base" != "$head" ] \
+             && [ "$(git rev-list --count "$base..$head" || echo 0)" != 0 ]; then
+            echo "::error::commits in range but no files resolved; this check examined nothing."
+            exit 1
+          fi
           echo "Examined $n added or modified file(s)."
 
           bad=0
