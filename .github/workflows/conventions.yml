@@ -1,0 +1,21 @@
+# Calls the house conventions check, which lives in this repo.
+#
+# A LOCAL reference rather than the org-qualified one every other repo uses,
+# because the reusable workflow is right next to this file. `uses:` with a
+# `./` path is resolved in the calling repo at the calling commit, so a change
+# to the check and a change to this caller land together and are tested
+# together, which is the one advantage this repo has over the consumers.
+#
+# `conventions-check.yml` declares only `on: workflow_call`, so it never runs
+# by itself and does not appear as a second workflow on every push.
+
+name: conventions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  conventions:
+    uses: ./.github/workflows/conventions-check.yml

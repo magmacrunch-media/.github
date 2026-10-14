@@ -1,0 +1,194 @@
+# The house conventions, checked by CI instead of by a hook.
+#
+# WHY THIS EXISTS. `no-em-dash.sh --install-all` puts a pre-commit hook in 48 of
+# 50 repos and **a hook does not travel with a clone**. So the only mechanical
+# control in this tree is enforced on one machine. Measured 2026-10-13: a second
+# person now has push on all 45 org repos, their clone has no hooks, and nothing
+# in any workflow anywhere checked any convention. The rules were also thin where
+# they would actually be read: of the 42 AGENTS.md files, 38 mention AI
+# attribution, 25 commit identity, 13 line endings, 5 the shared tree, and
+# **2 em dashes**.
+#
+# HOW TO USE IT. This is a reusable workflow. Put it in a repo every consumer can
+# read, then call it in three lines from each repo:
+#
+#     name: conventions
+#     on: [push, pull_request]
+#     jobs:
+#       conventions:
+#         uses: magmacrunch-media/.github/.github/workflows/conventions-check.yml@main
+#
+# `.github` is PUBLIC, which is what makes it callable from every private repo
+# without a token: a public repo's reusable workflows are available org wide. A
+# private host would need per-repo access granted, which is 42 settings pages.
+# Nothing secret goes in here, and nothing should.
+#
+# WHAT IT DOES NOT DO. It does not reformat, rewrite or push. It reads the diff
+# and the commit messages and exits non-zero. Every fix is the author's.
+#
+# THE DISCIPLINE IT INHERITS, from git-status.ps1, count-status.ps1 and
+# docs-status.ps1: it prints how much it examined on EVERY run and fails when
+# that comes back impossible, so **a broken scan cannot read as a clean pass.**
+# A checker whose range resolution silently breaks and then reports success is
+# the exact fault this tree keeps recording: the identity sweep that passes by
+# finding nothing, refresh.ps1 printing a match over a comparison it had not
+# made, crunch-c's dispatch 401ing for three weeks with nobody reading it.
+
+name: conventions
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: Runner label. Private repos should pass a self hosted one.
+        type: string
+        default: ubuntu-latest
+      skip-em-dash:
+        description: Set true only for a repo whose own pre-commit already does it.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  conventions:
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The whole history, because the range below needs both endpoints to
+          # exist locally. A shallow clone makes merge-base fail, and a failing
+          # merge-base is how this check would silently examine nothing.
+          fetch-depth: 0
+
+      - name: Work out what is new in this push or pull request
+        id: range
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          fi
+
+          # A new branch, a force push, or the first push to a repo gives a base
+          # of all zeroes or one that is simply not here. Fall back to the first
+          # parent, which examines the tip commit rather than nothing.
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "base unusable, falling back to ${head}^" >&2
+            base="$(git rev-parse "${head}^" 2>/dev/null || echo "$head")"
+          fi
+
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "Range: $base..$head"
+
+      - name: No em dash on an ADDED line
+        if: ${{ !inputs.skip-em-dash }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ steps.range.outputs.base }}'
+          head='${{ steps.range.outputs.head }}'
+
+          # ADDED lines only, which is the whole design and not a shortcut. The
+          # back catalogue holds 8,848 em dashes across 651 markdown files; a
+          # sweep would rewrite all of them to fix nothing anybody reads, and
+          # would do it straight into the CRLF traps in CLAUDE.md.
+          added="$(git diff --unified=0 "$base" "$head" -- . \
+                   | grep -E '^\+' | grep -v '^\+\+\+' || true)"
+          n="$(printf '%s' "$added" | grep -c '' || true)"
+          echo "Examined $n added line(s)."
+
+          # BUILT, never spelled. An editor tool renders a backslash-u escape
+          # AS the literal dash, which put one into this very file and would
+          # have made it fail its own check on the commit that added it. An
+          # octal printf dodges both traps, as chr(0x2014) does in the python.
+          em="$(printf '\342\200\224')"
+          hits="$(printf '%s' "$added" | grep -n "$em" || true)"
+          if [ -n "$hits" ]; then
+            echo "::error::em dash on an added line. Use a comma, a colon, or two hyphens."
+            printf '%s\n' "$hits" | head -20
+            exit 1
+          fi
+          echo "No em dash on any added line."
+
+      - name: No AI attribution in a commit message
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ steps.range.outputs.base }}'
+          head='${{ steps.range.outputs.head }}'
+
+          msgs="$(git log --format='%H%n%B%n--END--' "$base..$head" || true)"
+          n="$(git rev-list --count "$base..$head" || echo 0)"
+          echo "Examined $n commit message(s)."
+
+          # Zero commits in a range that should have at least one means the
+          # range resolution failed, not that the work is clean.
+          if [ "$n" = 0 ] && [ "$base" != "$head" ]; then
+            echo "::error::the range resolved to no commits; this check examined nothing."
+            exit 1
+          fi
+
+          if printf '%s' "$msgs" | grep -niE \
+             'co-authored-by:[[:space:]]*(claude|chatgpt|copilot|gpt|gemini|cursor)|generated (with|by) (claude|chatgpt|copilot|ai)|🤖' ; then
+            echo "::error::AI attribution in a commit message. The house rule is none anywhere: not in commit messages, PR bodies, release notes, comments or docs."
+            exit 1
+          fi
+          echo "No AI attribution found."
+
+      - name: Nothing added with CRLF in the index
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ steps.range.outputs.base }}'
+          head='${{ steps.range.outputs.head }}'
+
+          # The index is what matters, not the working tree. A repo may legally
+          # pin *.bat, *.sln or *.csproj to CRLF, so ask git what IT thinks each
+          # file's committed form is rather than hardcoding a list.
+          files="$(git diff --name-only --diff-filter=ACM "$base" "$head" || true)"
+          n="$(printf '%s' "$files" | grep -c '' || true)"
+          echo "Examined $n added or modified file(s)."
+
+          bad=0
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            [ -f "$f" ] || continue
+            line="$(git ls-files --eol -- "$f" 2>/dev/null || true)"
+            [ -n "$line" ] || continue
+            case "$line" in
+              *i/crlf*)
+                # Allowed only where an attribute says so.
+                case "$line" in
+                  *eol=crlf*) : ;;
+                  *) echo "::error file=$f::committed with CRLF and no eol=crlf attribute"; bad=1 ;;
+                esac
+                ;;
+            esac
+          done <<< "$files"
+
+          [ "$bad" = 0 ] || exit 1
+          echo "No unexpected CRLF in the index."
+
+      - name: This repo has an AGENTS.md
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f AGENTS.md ]; then
+            echo "::error::no AGENTS.md. It is the contract every agent here reads, and the only one that travels with a clone."
+            exit 1
+          fi
+          lines="$(grep -c '' AGENTS.md || echo 0)"
+          echo "AGENTS.md present, $lines line(s)."
+          # Four repos are 7-line stubs against 530 for web/website. A stub is
+          # worse than useless to a model: it looks like guidance and is not.
+          if [ "$lines" -lt 15 ]; then
+            echo "::warning::AGENTS.md is $lines lines. A stub reads as guidance and is not. Say what the repo is, how to run its checks, and what must be verified rather than assumed."
+          fi
