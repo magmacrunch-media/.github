@@ -247,8 +247,20 @@ jobs:
           fi
           lines="$(grep -c '' AGENTS.md || echo 0)"
           echo "AGENTS.md present, $lines line(s)."
-          # Four repos are 7-line stubs against 530 for web/website. A stub is
-          # worse than useless to a model: it looks like guidance and is not.
+          # THERE ARE NO STUBS LEFT, as of 2026-10-14. Six repos carried a
+          # 267-byte AGENTS.md holding one rule; all six were written, and the
+          # smallest in the org is now 1,411 bytes.
+          #
+          # This comment said FOUR and the real number was six, because that
+          # count came from a scan of one checkout rather than from the org:
+          # two of the six are not cloned in the tree it walked. Do not count
+          # these from a working copy. The org is the denominator:
+          #
+          #   gh api repos/<owner>/<repo>/contents/AGENTS.md --jq .size
+          #
+          # The threshold stays. A stub is worse than useless to a model: it
+          # looks like guidance and is not. It now guards against a NEW repo
+          # arriving with one, rather than describing a known backlog.
           if [ "$lines" -lt 15 ]; then
             echo "::warning::AGENTS.md is $lines lines. A stub reads as guidance and is not. Say what the repo is, how to run its checks, and what must be verified rather than assumed."
           fi
