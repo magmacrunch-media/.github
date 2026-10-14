@@ -47,6 +47,22 @@ on:
         description: Set true only for a repo whose own pre-commit already does it.
         type: boolean
         default: false
+      exclude-paths:
+        description: >
+          Whitespace separated git pathspecs excluded from the em dash and CRLF
+          checks. For GENERATED or SYNCED content only, where the text comes
+          from somewhere else and nobody here typed it.
+          Measured on magmacrunch.com 2026-10-13: ELEVEN workflows in that repo
+          commit and push generated content, and search-index.json alone holds
+          465 lines with an em dash, theme-audit.json 40,
+          ware/crunch-c/lessons.js 58, and 192 files under archive/by-artist/.
+          Without this the check would fail most of that repo's automation on
+          content derived from MusicBrainz and from other repos.
+          Keep the list to things that are regenerated. Excluding a hand edited
+          file turns this check off for the place it is most needed, which is
+          the opposite of the point.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -91,6 +107,8 @@ jobs:
       - name: No em dash on an ADDED line
         if: ${{ !inputs.skip-em-dash }}
         shell: bash
+        env:
+          EXCLUDE_PATHS: ${{ inputs.exclude-paths }}
         run: |
           set -euo pipefail
           base='${{ steps.range.outputs.base }}'
@@ -108,7 +126,16 @@ jobs:
           # all away. The step reported "Examined 0 added line(s)" on a commit
           # that added 215 and PASSED. A character class means the same thing in
           # both dialects, so there is nothing left to get wrong.
-          added="$(git diff --unified=0 "$base" "$head" -- . \
+          # Pathspecs come in through env, never interpolated into the script
+          # body: `${{ }}` inside a run: block is textual substitution, so a
+          # value containing a quote or a semicolon would become shell.
+          excl=()
+          for p in $EXCLUDE_PATHS; do excl+=(":(exclude)$p"); done
+          if [ ${#excl[@]} -gt 0 ]; then
+            echo "Excluding ${#excl[@]} generated path(s): $EXCLUDE_PATHS"
+          fi
+
+          added="$(git diff --unified=0 "$base" "$head" -- . ${excl[@]+"${excl[@]}"} \
                    | grep -E '^[+]' | grep -vE '^[+][+][+]' || true)"
           n="$(printf '%s' "$added" | grep -c '' || true)"
           echo "Examined $n added line(s)."
@@ -119,7 +146,10 @@ jobs:
           # added lines alongside changed files means the filter broke, not that
           # the work is clean. This is the "a broken scan cannot read as a clean
           # pass" rule, and its absence here is exactly how it read as one.
-          changed="$(git diff --name-only "$base" "$head" | grep -c '' || true)"
+          # Counted WITH the same excludes, otherwise a commit that touches
+          # only generated paths has changed files and zero added lines, and the
+          # guard fires on a run that is behaving correctly.
+          changed="$(git diff --name-only "$base" "$head" -- . ${excl[@]+"${excl[@]}"} | grep -c '' || true)"
           if [ "$n" = 0 ] && [ "$changed" != 0 ]; then
             echo "::error::$changed file(s) changed but 0 added lines were found. The diff filter is broken; this check examined nothing."
             exit 1
@@ -165,6 +195,8 @@ jobs:
 
       - name: Nothing added with CRLF in the index
         shell: bash
+        env:
+          EXCLUDE_PATHS: ${{ inputs.exclude-paths }}
         run: |
           set -euo pipefail
           base='${{ steps.range.outputs.base }}'
@@ -173,7 +205,9 @@ jobs:
           # The index is what matters, not the working tree. A repo may legally
           # pin *.bat, *.sln or *.csproj to CRLF, so ask git what IT thinks each
           # file's committed form is rather than hardcoding a list.
-          files="$(git diff --name-only --diff-filter=ACM "$base" "$head" || true)"
+          excl=()
+          for p in $EXCLUDE_PATHS; do excl+=(":(exclude)$p"); done
+          files="$(git diff --name-only --diff-filter=ACM "$base" "$head" -- . ${excl[@]+"${excl[@]}"} || true)"
           n="$(printf '%s' "$files" | grep -c '' || true)"
           # Same guard as the other two steps. A range with commits in it that
           # yields no added or modified files means the range or the filter is
