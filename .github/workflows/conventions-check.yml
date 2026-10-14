@@ -47,9 +47,17 @@ on:
   workflow_call:
     inputs:
       runs-on:
-        description: Runner label. Private repos should pass a self hosted one.
+        description: >
+          A JSON ARRAY of runner labels, as a string. Private repos pass
+          '["self-hosted","MC1","Linux"]' so their minutes are free; public
+          repos leave it alone, because the Default runner group has
+          allows_public_repositories = false and a public repo pointed at an
+          org runner QUEUES FOREVER rather than failing.
+          It is JSON rather than a bare label because a single label cannot
+          name MC1's Linux runner: `MC1` is carried by MC1-linux-org AND
+          MC1-win-org, so the OS has to be named too.
         type: string
-        default: ubuntu-latest
+        default: '["ubuntu-latest"]'
       skip-em-dash:
         description: Set true only for a repo whose own pre-commit already does it.
         type: boolean
@@ -60,7 +68,9 @@ permissions:
 
 jobs:
   conventions:
-    runs-on: ${{ inputs.runs-on }}
+    # fromJSON, because the input is a JSON array string. A bare label
+    # cannot name MC1's Linux runner: `MC1` matches MC1-win-org too.
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
     steps:
       - uses: actions/checkout@v5
         with:
