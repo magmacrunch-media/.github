@@ -233,15 +233,34 @@ jobs:
           # file's committed form is rather than hardcoding a list.
           files="$(git diff --name-only --diff-filter=ACM "$base" "$head" || true)"
           n="$(printf '%s' "$files" | grep -c '' || true)"
-          # Same guard as the other two steps. A range with commits in it that
-          # yields no added or modified files means the range or the filter is
-          # wrong, not that nothing happened.
-          if [ "$n" = 0 ] && [ "$base" != "$head" ] \
+          echo "Examined $n added or modified file(s)."
+
+          # SAME GUARD AS THE STEP ABOVE, AND IT HAD THE SAME BUG. It failed
+          # when the ACM filter came back empty while the range held commits,
+          # on the premise that a range with commits must hold an added or
+          # modified file. A commit that only DELETES files holds none, and
+          # nor does a pure rename, because ACM excludes both D and R.
+          #
+          # magmacrunch-ai 1f55cf2 would have failed HERE, and the only reason
+          # nobody saw it is that the em dash step failed first and left this
+          # one skipped. Proven rather than reasoned: with that step fixed and
+          # this one not, running this against 1f55cf2 gives "commits in range
+          # but no files resolved" on a commit which removed one file and
+          # touched nothing else. So the first fix would have moved the false
+          # positive down a step rather than ending it.
+          #
+          # It asks whether git resolved any file AT ALL now, which is the
+          # question it meant. No file of any status in a range holding commits
+          # is a broken range; no ACM file is ordinary work. ACM excluding R
+          # also means a renamed file's committed form goes unchecked, which is
+          # a real hole and a wider change than this one: adding R decides to
+          # fail pushes that pass today, so it wants its own commit.
+          touched="$(git diff --name-only "$base" "$head" | grep -c '' || true)"
+          if [ "$touched" = 0 ] && [ "$base" != "$head" ] \
              && [ "$(git rev-list --count "$base..$head" || echo 0)" != 0 ]; then
             echo "::error::commits in range but no files resolved; this check examined nothing."
             exit 1
           fi
-          echo "Examined $n added or modified file(s)."
 
           bad=0
           while IFS= read -r f; do
