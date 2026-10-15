@@ -384,13 +384,50 @@ jobs:
           # backup records whatever the website records, which is one direction
           # rather than a pair to keep in step.
           #
-          # ONE GAP IS STILL OPEN AND IT IS NOT THIS ONE. A file carrying BOTH
-          # endings is i/mixed, not i/crlf, so the case below matches it under
-          # neither filter and a half-converted file passes. Measured, no
-          # tracked file anywhere in the tree is i/mixed today, so it is a shape
-          # with no instances rather than a hole with a cost. Widening to it is
-          # a separate decision about a separate thing, and wants its own
-          # commit for the same reason this one did.
+          # i/mixed IS CAUGHT TOO NOW, which is the gap the commit above named
+          # and deferred. A file carrying BOTH endings is i/mixed, not i/crlf,
+          # so the arm below matched it under neither filter and a
+          # half-converted file passed a step whose name says nothing added
+          # with CRLF. No tracked file anywhere in the tree is i/mixed today,
+          # so unlike the rename hole this closes a shape with no instances
+          # rather than one with a cost. Worth closing anyway: a step that
+          # prints "Examined 1" and then declines to judge that one file is
+          # this file's own named fault rather than an untidy edge of it.
+          #
+          # AND MIXED IS NEVER DELIBERATE THE WAY PURE CRLF SOMETIMES IS. A
+          # .sln is legitimately CRLF and one in this org says so with an
+          # attribute. Nothing is legitimately half of each. CLAUDE.md records
+          # both ways it actually arrives: an io.open(newline=CRLF) write of a
+          # string that already held CRLF, and ruff --fix rewriting an import
+          # block separated by lone CR. Both are accidents caught
+          # mid-conversion, which is why the message names the one-command fix.
+          #
+          # WHAT CLOSING IT COSTS: NOTHING LIVE, AND SEVEN COMMITS IN A REPLAY.
+          # Measured by reading EVERY blob in all 47 org repos, reachable or
+          # not, which is both cheaper than a per-commit replay and stronger:
+          # a blob that was never mixed cannot be reported i/mixed at any
+          # commit. 30,697 blobs read, 2 over an 8 MB cap and skipped as
+          # binaries.
+          #
+          # Nothing is i/mixed at any repo's HEAD, so no push can newly fail.
+          # That is the number that matters, because this step reads
+          # `git ls-files --eol` against the CHECKED OUT commit rather than
+          # per-commit blobs, so the index it judges is always the index of the
+          # commit being pushed.
+          #
+          # Eleven blobs in history do hold both endings. Four are unreachable
+          # objects in magnolia and george-boole, in no commit at all, left by
+          # a force push or an aborted rebase. The other seven are all one
+          # path, ware/magnolia/index.html in web\website, and seven commits
+          # between 2026-09-12 and 2026-09-17 modified it while it was mixed.
+          # Replayed as HEAD those seven would newly fail.
+          #
+          # They are not a new class of breakage, which is what makes this
+          # cheap. That file is i/crlf with no attribute TODAY and is one of
+          # the three this step already fails whenever a push touches it,
+          # recorded above and deliberately left alone. Its history is the
+          # conversion that produced that state, caught half done. The same
+          # single `git add --renormalize` answers both.
           resolved="$(git diff --name-status "$base" "$head" | grep -cE '^[^D]' || true)"
           echo "git resolved $resolved added or modified file(s) over the same range."
           if [ "$n" = 0 ] && [ "$resolved" != 0 ]; then
@@ -404,13 +441,85 @@ jobs:
             [ -f "$f" ] || continue
             line="$(git ls-files --eol -- "$f" 2>/dev/null || true)"
             [ -n "$line" ] || continue
-            case "$line" in
-              *i/crlf*)
+
+            # PARSED BY FIELD RATHER THAN GREPPED OUT OF THE WHOLE LINE, and
+            # that is a bug fix rather than tidying. `git ls-files --eol`
+            # prints `i/<eol> w/<eol> attr/<attrs>`, a TAB, then THE PATH, so a
+            # case on the whole line tests the filename too. `*i/crlf*` matches
+            # a pure-LF file at api/crlf-notes.md, because that path contains
+            # the literal text i/crlf, and the step then reports CRLF in a file
+            # that has none.
+            #
+            # No tracked path in the org triggers it today, so it is latent
+            # rather than live. What makes it this commit's problem is that
+            # widening the arm widens the fault with it: `*i/mixed*` would
+            # match api/mixed-eol.txt, and a `*-text*` exemption would match
+            # plain-text.txt, which is the worse direction because it EXEMPTS a
+            # file silently instead of failing one loudly. Three instances of
+            # one mistake, two of them added by this change, so the parse is
+            # the change.
+            #
+            # The first TAB is the separator even for a path containing one,
+            # because git quotes such a path rather than emitting a raw TAB.
+            meta="${line%%$'\t'*}"
+            ieol="${meta%%[[:blank:]]*}"
+            attrs=" ${meta#*attr/} "
+
+            # -text IS THE ONE DECLARATION THAT LEGITIMISES EITHER SHAPE, and
+            # it has to be read off attr/ because of a measurement that
+            # overturns the obvious design: `-text` DOES NOT CHANGE THE i/
+            # FIELD. A mixed file declared -text still reads
+            # `i/mixed w/mixed attr/-text`, whether the attribute landed before
+            # the add or after it, and it survives `git add --renormalize`,
+            # because -text means store the bytes verbatim and the field
+            # reports the bytes actually stored. The tempting version of this
+            # change, where -text makes a file read i/-text and so needs no
+            # handling at all, is simply wrong.
+            #
+            # i/-text DOES occur, from git's own BINARY HEURISTIC on content: a
+            # lone-CR file reads i/-text with no attribute involved. So real
+            # binaries never reach either arm regardless, and the -text
+            # attribute case is specifically the file git would read as text
+            # that the repo says is bytes.
+            #
+            # EXTENDING IT TO THE CRLF ARM IS A SECOND FIX FOLDED IN
+            # DELIBERATELY. An all-CRLF file declared -text fails this step as
+            # it stands: i/crlf matches and eol=crlf does not, so a repo that
+            # declared its bytes verbatim is told it has unexpected CRLF, which
+            # is the check being wrong. Zero instances in the org. It belongs
+            # here and not in a commit of its own because this commit is what
+            # would otherwise make the same declaration mean two different
+            # things in adjacent arms, which is the incoherence the ACMRT and
+            # ^[^D] pair above exists to warn about, one level down.
+            case "$attrs" in
+              *' -text '*) continue ;;
+            esac
+
+            case "$ieol" in
+              i/crlf)
                 # Allowed only where an attribute says so.
-                case "$line" in
-                  *eol=crlf*) : ;;
+                case "$attrs" in
+                  *' eol=crlf '*) : ;;
                   *) echo "::error file=$f::committed with CRLF and no eol=crlf attribute"; bad=1 ;;
                 esac
+                ;;
+              i/mixed)
+                # NO eol=crlf EXEMPTION HERE, AND THE ASYMMETRY IS THE POINT.
+                # eol=crlf implies text, so a renormalize under it yields i/lf.
+                # i/mixed beside eol=crlf is therefore ALWAYS a half-applied
+                # conversion rather than a declared intent, and the fix is the
+                # one command named below.
+                #
+                # It is reachable, by exactly one route, which is worth knowing
+                # because three drafts of the fixture failed to reach it and
+                # reported the case handled while testing an LF file. The blob
+                # must predate the rule, and the commit under test must be a
+                # BARE `git mv`: that moves the index entry verbatim and scores
+                # R100, which the ACMRT filter above resolves. A modify, or a
+                # `git add -A` after the mv, re-runs the clean filter and
+                # normalises to i/lf.
+                echo "::error file=$f::committed with MIXED line endings, which no attribute declares. Fix with: git add --renormalize -- $f"
+                bad=1
                 ;;
             esac
           done <<< "$files"
