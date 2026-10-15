@@ -249,16 +249,54 @@ jobs:
           # touched nothing else. So the first fix would have moved the false
           # positive down a step rather than ending it.
           #
-          # It asks whether git resolved any file AT ALL now, which is the
-          # question it meant. No file of any status in a range holding commits
-          # is a broken range; no ACM file is ordinary work. ACM excluding R
-          # also means a renamed file's committed form goes unchecked, which is
-          # a real hole and a wider change than this one: adding R decides to
-          # fail pushes that pass today, so it wants its own commit.
-          touched="$(git diff --name-only "$base" "$head" | grep -c '' || true)"
-          if [ "$touched" = 0 ] && [ "$base" != "$head" ] \
-             && [ "$(git rev-list --count "$base..$head" || echo 0)" != 0 ]; then
-            echo "::error::commits in range but no files resolved; this check examined nothing."
+          # ASKING WHETHER GIT RESOLVED ANY FILE AT ALL FIXED THE DELETION
+          # AND LEFT ONE SHAPE BEHIND: AN EMPTY COMMIT. `git commit
+          # --allow-empty` holds no file of any status, so "a range with
+          # commits that resolves no file is a broken range" fails it while
+          # the range is perfectly good. That is the same false premise one
+          # notch narrower, and it is worth saying plainly: the first version
+          # asked whether FILES CHANGED, the second whether ANY FILE RESOLVED,
+          # and both asked the diff to prove the scan ran when an empty diff
+          # is a legitimate answer to a legitimate commit.
+          #
+          # Six empty commits are in this tree, in web\website (2),
+          # very-long-boards (2), george-boole and crystal-mirror-maze, and
+          # they are deliberate rather than stray: web\website 6b5d5e45 is
+          # Pi Bot's "test: verify deploy key push". Proven rather than
+          # reasoned, by running this step against that commit, which gives
+          # "commits in range but no files resolved" on a commit whose entire
+          # purpose was to carry nothing.
+          #
+          # So ask what the em dash step asks, which rests on no premise at
+          # all: COUNT THE SAME THING TWICE BY DIFFERENT MEANS, and fail only
+          # on the one disagreement that cannot happen. If git names added or
+          # modified files over this range while the filter returned none, the
+          # filter is broken. If git names none there are none, whether the
+          # commit deleted, renamed, or did nothing whatever.
+          #
+          # The two counts share a diff engine and that is not the weakness it
+          # looks: what broke in every instance this file records was the
+          # POST-PROCESSING, a grep dialect here and a `--diff-filter` there,
+          # and the post-processing is exactly what differs between the sides.
+          #
+          # A range resolving to nothing is a different fault and is no longer
+          # tested here, because "the range holds commits" is the premise that
+          # made this guard wrong twice. The commit message step above still
+          # fails the whole job on a range of zero commits, which is where
+          # that test belongs and where it is already right.
+          #
+          # ACM excluding R still leaves a renamed file's committed form
+          # unchecked, and that is a hole rather than an oversight: a commit
+          # that renames a file and rewrites it with CRLF in one breath passes
+          # this step today. Measured, closing it is cheap, five tracked files
+          # in the whole tree are i/crlf with no eol=crlf attribute and four of
+          # those are two generated magnolia files duplicated into web\website
+          # and web\magma-ops-backup. It still decides to fail pushes that
+          # pass today, so it wants its own commit.
+          resolved="$(git diff --name-status "$base" "$head" | grep -cE '^[ACM]' || true)"
+          echo "git resolved $resolved added or modified file(s) over the same range."
+          if [ "$n" = 0 ] && [ "$resolved" != 0 ]; then
+            echo "::error::git resolved $resolved added or modified file(s) and the filter returned 0. The diff filter is broken; this check examined nothing."
             exit 1
           fi
 
