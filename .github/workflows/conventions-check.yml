@@ -132,13 +132,39 @@ jobs:
 
           # AND THE GUARD, which is what should have caught the above and was
           # missing from this step while the commit-message step below had it.
-          # A commit that changes a file always adds or removes lines, so zero
-          # added lines alongside changed files means the filter broke, not that
-          # the work is clean. This is the "a broken scan cannot read as a clean
-          # pass" rule, and its absence here is exactly how it read as one.
-          changed="$(git diff --name-only "$base" "$head" | grep -c '' || true)"
-          if [ "$n" = 0 ] && [ "$changed" != 0 ]; then
-            echo "::error::$changed file(s) changed but 0 added lines were found. The diff filter is broken; this check examined nothing."
+          # It asks git for ITS OWN count of added lines, over the same range
+          # and the same pathspec, and fails when the filter found none while
+          # git says there were some. Two measurements of one quantity, which
+          # is the "a broken scan cannot read as a clean pass" rule: the filter
+          # collapsing to nothing cannot read as clean work, because the second
+          # count does not collapse with it.
+          #
+          # IT COUNTED FILE NAMES, AND THAT WAS THE BUG. It read
+          # `git diff --name-only | grep -c ''` and failed whenever files
+          # changed and no lines were added, on the premise that a commit which
+          # changes a file always adds or removes lines. That premise is false
+          # four ways: a commit that only DELETES adds nothing, and neither does
+          # a pure rename, a mode change, or adding a binary file.
+          # magmacrunch-ai 1f55cf2 is what proved it, run 38662832109, failing
+          # with "1 file(s) changed but 0 added lines were found" on a commit
+          # whose entire content was removing a file. Of the first 807 commits
+          # swept in this tree FIVE would have failed here, four deletion-only
+          # and one adding nothing but a .woff2. None of the 807 fails the
+          # count below.
+          #
+          # ONE DIRECTION ONLY, which is measured rather than cautious. The two
+          # counts legitimately disagree both ways on real commits: a binary
+          # file with a textconv shows added lines that numstat scores as `-`,
+          # and a 1.2 MB PDF in web\website contributes 508 that way, while
+          # added content which itself begins `+++` is eaten by the header
+          # filter above. 10 of those 807 commits disagree, so equality would be
+          # a gate on a coincidence. Zero against non-zero is the one impossible
+          # pair, and it is the exact shape the bug above had.
+          reported="$(git diff --numstat "$base" "$head" -- . \
+                      | awk '$1 != "-" { s += $1 } END { print s + 0 }')"
+          echo "git reports $reported added line(s) over the same range."
+          if [ "$n" = 0 ] && [ "$reported" != 0 ]; then
+            echo "::error::git reports $reported added line(s) and the filter found 0. The diff filter is broken; this check examined nothing."
             exit 1
           fi
 
