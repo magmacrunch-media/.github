@@ -231,7 +231,36 @@ jobs:
           # The index is what matters, not the working tree. A repo may legally
           # pin *.bat, *.sln or *.csproj to CRLF, so ask git what IT thinks each
           # file's committed form is rather than hardcoding a list.
-          files="$(git diff --name-only --diff-filter=ACM "$base" "$head" || true)"
+          #
+          # ACMRT RATHER THAN ACM, SO A RENAMED FILE IS CHECKED AT ALL. ACM
+          # dropped R, and a rename is exactly where a CRLF rewrite could ride
+          # in unexamined: git scores the pair as a rename, the filter resolves
+          # no file, and the step prints "Examined 0 added or modified file(s)"
+          # and passes. That is the silent pass this file exists to refuse, and
+          # it was left open for one commit on purpose, because closing it
+          # decides to fail pushes that pass today, which is a different kind of
+          # decision from removing a false positive.
+          #
+          # Three shapes reach it, each built in a fixture and each failing now:
+          # a pure rename of a file that is ALREADY CRLF, which is the shape
+          # every such file in this tree has; a rename with a small edit of one;
+          # and a rename that converts an LF file to CRLF wholesale.
+          #
+          # THE THIRD NEEDS A BIG FILE TO EXIST AT ALL, which is worth knowing
+          # before anybody reproduces it. Rename detection is SIMILARITY based,
+          # so converting a 3-line file to CRLF scores below the 50% threshold,
+          # git breaks the pair into D plus A, and the A was caught by ACM all
+          # along. At 400 lines the same conversion scores R094 and was
+          # invisible. A fixture case written at the small size reports the hole
+          # closed while testing nothing, and the first one written here did
+          # exactly that.
+          #
+          # ACMRT is the exact complement of D between two commits, so this
+          # reads as "every path this commit leaves behind", which is the honest
+          # set for a question about committed form. U, X and B do not occur in
+          # a commit-to-commit diff, so there is no fourth letter waiting to be
+          # forgotten.
+          files="$(git diff --name-only --diff-filter=ACMRT "$base" "$head" || true)"
           n="$(printf '%s' "$files" | grep -c '' || true)"
           echo "Examined $n added or modified file(s)."
 
@@ -285,15 +314,84 @@ jobs:
           # fails the whole job on a range of zero commits, which is where
           # that test belongs and where it is already right.
           #
-          # ACM excluding R still leaves a renamed file's committed form
-          # unchecked, and that is a hole rather than an oversight: a commit
-          # that renames a file and rewrites it with CRLF in one breath passes
-          # this step today. Measured, closing it is cheap, five tracked files
-          # in the whole tree are i/crlf with no eol=crlf attribute and four of
-          # those are two generated magnolia files duplicated into web\website
-          # and web\magma-ops-backup. It still decides to fail pushes that
-          # pass today, so it wants its own commit.
-          resolved="$(git diff --name-status "$base" "$head" | grep -cE '^[ACM]' || true)"
+          # ^[^D] RATHER THAN ^[ACM], AND THE TWO MOVE TOGETHER. ACMRT is the
+          # complement of D, so this cross-count has to be the complement too,
+          # or the two sides stop counting the same quantity. Widen the filter
+          # and leave this at ^[ACM] and a pure rename prints "Examined 1"
+          # beside "git resolved 0". It still PASSES, because the gate fires
+          # only on zero against non-zero, and that is the trap: nothing goes
+          # red and the report is simply false. In a step whose entire mechanism
+          # is the two printed numbers, an incoherent pair is the fault itself
+          # rather than an untidy edge of it.
+          #
+          # The other half-applied pair does go red, and is the one to expect if
+          # somebody edits one line and not the other: this widened to ^[^D]
+          # with the filter left at ACM fires on any commit whose every entry is
+          # a rename or a type change, which is 4 commits in this tree, in
+          # transatlantic_colleague, magmascript twice, and web\website.
+          #
+          # WHAT CLOSING IT COST, measured by replaying this step over real
+          # history with each commit's OWN .gitattributes rather than today's,
+          # which `git --attr-source=<sha> check-attr` is for and which is the
+          # difference between a defensible number and a flattering one. Over
+          # the 4,609 commits in the 47 org repos, 47 of them carrying a rename
+          # or a type change: both arms of this guard fire zero times, which is
+          # what the pair they replace also did, and exactly ONE commit would
+          # newly fail.
+          #
+          # That one is very-long-boards 556dd31, which moved
+          # very-long-boards.sln into godot/ at a time when that repo had NO
+          # .gitattributes at all. The eol=crlf rule that makes the same file
+          # legal arrived later, in 8b7c682. So the single historical casualty
+          # is a repo that has since declared what it meant, and under today's
+          # attributes nothing in the org fails. Measuring with today's
+          # attributes instead reports zero, and reporting that number would
+          # have been the easy mistake.
+          #
+          # Across the whole tree including dev\jamccoy the figure is 9, the
+          # other 8 all there, and that half is not an audience: no repo under
+          # jamccoy has an AGENTS.md, so the last step of this workflow would
+          # fail all eight of them before this step ran.
+          #
+          # THE FILES THIS NEWLY EXPOSES ARE LEFT AS THEY ARE, deliberately.
+          # Three tracked files in the org are i/crlf with no eol=crlf
+          # attribute: ware/magnolia/app.js and ware/magnolia/index.html in
+          # web\website, and notes/ReadMe/ReadMe.txt in
+          # transatlantic_colleague, which is a vendored upstream readme. None
+          # of the three has ever been renamed, so none fails anything today,
+          # and if one ever is, the error above is a TRUE statement whose fix is
+          # a single `git add --renormalize`. A check doing its job is not a
+          # cost to be pre-empted by commits in two other repos, one of which
+          # pins line endings deliberately narrowly and says so at length in its
+          # own .gitattributes.
+          #
+          # very-long-boards.sln is NOT a fourth. It is i/crlf and declared
+          # eol=crlf, which is exactly the case the attribute test below exists
+          # to let through, and it is the only file in the org using it.
+          #
+          # AN eol=crlf ATTRIBUTE FOR THE OTHER THREE WAS REJECTED OUTRIGHT. It
+          # would declare incidental CRLF intentional and exempt those paths for
+          # good, which is the opposite of what the rule is for.
+          #
+          # web\magma-ops-backup holds the same two magnolia files and needs
+          # nothing either way. It is a DOWNSTREAM MIRROR written by the
+          # website's backup-private.yml, it carries no workflows at all, and it
+          # cannot fail a check it does not run. Note its latest commit fails
+          # this step under ACM TOO, on those same two files as plain M entries,
+          # so if it ever gains CI this change is not what breaks it. The worry
+          # that whatever is decided has to hold in both repos or the backup
+          # starts failing on its own sync does not survive looking twice: the
+          # backup records whatever the website records, which is one direction
+          # rather than a pair to keep in step.
+          #
+          # ONE GAP IS STILL OPEN AND IT IS NOT THIS ONE. A file carrying BOTH
+          # endings is i/mixed, not i/crlf, so the case below matches it under
+          # neither filter and a half-converted file passes. Measured, no
+          # tracked file anywhere in the tree is i/mixed today, so it is a shape
+          # with no instances rather than a hole with a cost. Widening to it is
+          # a separate decision about a separate thing, and wants its own
+          # commit for the same reason this one did.
+          resolved="$(git diff --name-status "$base" "$head" | grep -cE '^[^D]' || true)"
           echo "git resolved $resolved added or modified file(s) over the same range."
           if [ "$n" = 0 ] && [ "$resolved" != 0 ]; then
             echo "::error::git resolved $resolved added or modified file(s) and the filter returned 0. The diff filter is broken; this check examined nothing."
