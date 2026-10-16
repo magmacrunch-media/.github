@@ -1,6 +1,6 @@
 # The house conventions, checked by CI instead of by a hook.
 #
-# WHY THIS EXISTS. `no-em-dash.sh --install-all` puts a pre-commit hook in 48 of
+# WHY THIS EXISTS. `em-dash-status.sh --install-all` puts a pre-commit hook in 48 of
 # 50 repos and **a hook does not travel with a clone**. So the only mechanical
 # control in this tree is enforced on one machine. Measured 2026-10-13: a second
 # person now has push on all 45 org repos, their clone has no hooks, and nothing
@@ -186,12 +186,14 @@ jobs:
           #
           # So it reports the number and lets a person judge. The count is the
           # useful part: one dash in a paragraph is prose, thirty is a habit.
-          # no-em-dash.sh on the dev box now does the same thing: it counted and
-          # refused until 2026-10-16, which made this the lenient half of a rule
-          # whose two halves disagreed. It warns and passes too, so there is no
-          # strict version of this anywhere any more, deliberately. What the hook
-          # still refuses is a scan that could not run, which is a different
-          # fault wearing the same exit code until you read it.
+          # em-dash-status.sh on the dev box now does the same thing. It counted
+          # and REFUSED until 2026-10-16, under the name no-em-dash.sh, which
+          # made this the lenient half of a rule whose two halves disagreed; it
+          # warns and passes too now, and was renamed the same day because the
+          # old name asserted a rule it had stopped enforcing. So there is no
+          # strict version of this anywhere any more, deliberately. What that
+          # hook still refuses is a scan which could not run, a different fault
+          # wearing the same exit code until somebody reads it.
           if [ "$c" != 0 ]; then
             echo "::warning::$c added line(s) contain an em dash. Not a failure. Worth a look if that is a lot for one change."
             printf '%s\n' "$hits" | head -10
