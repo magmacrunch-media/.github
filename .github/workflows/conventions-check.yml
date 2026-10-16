@@ -186,9 +186,12 @@ jobs:
           #
           # So it reports the number and lets a person judge. The count is the
           # useful part: one dash in a paragraph is prose, thirty is a habit.
-          # no-em-dash.sh stays a hard pre-commit gate on the dev box, where it
-          # governs what somebody TYPES rather than what a workflow generates,
-          # and that is the right place for a strict version of this.
+          # no-em-dash.sh on the dev box now does the same thing: it counted and
+          # refused until 2026-10-16, which made this the lenient half of a rule
+          # whose two halves disagreed. It warns and passes too, so there is no
+          # strict version of this anywhere any more, deliberately. What the hook
+          # still refuses is a scan that could not run, which is a different
+          # fault wearing the same exit code until you read it.
           if [ "$c" != 0 ]; then
             echo "::warning::$c added line(s) contain an em dash. Not a failure. Worth a look if that is a lot for one change."
             printf '%s\n' "$hits" | head -10
