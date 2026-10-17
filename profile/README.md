@@ -12,8 +12,6 @@ magmacrunch media is a creative collective that produces music, film, video game
 - **[the archive](https://magmacrunch.com/archive/)** — recordings, releases, works, places, and the people who made them.
 - **[music](https://magmacrunch.com/music/)** and **[visual](https://magmacrunch.com/visual/)** — records, music videos, and design work.
 
-All of it is free, and none of it needs an account.
-
 <h3 align="left">install</h3>
 
 ```sh
