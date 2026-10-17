@@ -13,7 +13,11 @@ name: conventions
 
 on:
   push:
-    branches: [main]
+    # BOTH, because one repo is not on main. magmacrunch-ai's default branch is
+    # `master`, so a caller hardcoding `main` installs cleanly, reports success
+    # and then never fires: it was the one repo of 48 with no run at all after
+    # the rollout. Same branch assumption that made the wiki push fail earlier.
+    branches: [main, master]
   pull_request:
 
 jobs:
