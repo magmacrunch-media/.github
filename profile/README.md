@@ -21,7 +21,7 @@ pip install texastoast      # a Python RPG engine
 brew install magmacrunch-media/tap/magmascript
 ```
 
-Nine `@magmacrunch/adenosine-*` packages on [npm](https://www.npmjs.com/org/magmacrunch) are the engines behind the web arcade.
+Ten `@magmacrunch/adenosine-*` packages on [npm](https://www.npmjs.com/org/magmacrunch) are the engines behind the web arcade.
 
 <h3 align="left">source</h3>
 
