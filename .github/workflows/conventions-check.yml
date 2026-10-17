@@ -95,10 +95,32 @@ jobs:
           # A new branch, a force push, or the first push to a repo gives a base
           # of all zeroes or one that is simply not here. Fall back to the first
           # parent, which examines the tip commit rather than nothing.
+          #
+          # `--verify --quiet`, AND THAT IS THE WHOLE OF THIS FIX. It was
+          # `git rev-parse "${head}^" 2>/dev/null || echo "$head"`, which is
+          # broken on a ROOT commit in a way the redirect hides: rev-parse
+          # writes the unresolved argument `<sha>^` to STDOUT and exits
+          # non-zero, so the `|| echo` fires as well and base becomes TWO
+          # lines. A two-line value then breaks $GITHUB_OUTPUT itself, and the
+          # job dies on `Invalid format '<sha>'` naming neither the step nor
+          # the cause. Reproduced locally, not inferred.
+          #
+          # It fires on a repo whose FIRST push already carries this caller,
+          # which is how mcmillan2020 failed on 2026-10-16, 10 seconds after
+          # the repo was created. That is also exactly what a repo template
+          # would produce, so the durable fix for coverage would have walked
+          # every new repo into this.
+          #
+          # `--verify --quiet` prints nothing and exits 1 when it cannot
+          # resolve, so there is only ever one source of output.
           if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
              || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
             echo "base unusable, falling back to ${head}^" >&2
-            base="$(git rev-parse "${head}^" 2>/dev/null || echo "$head")"
+            base="$(git rev-parse --verify --quiet "${head}^" || true)"
+            # A root commit has no parent, so compare the tip against itself.
+            # Every step below guards on base = head and says it examined
+            # nothing rather than claiming a clean pass.
+            [ -n "$base" ] || base="$head"
           fi
 
           echo "base=$base" >> "$GITHUB_OUTPUT"
