@@ -7,10 +7,10 @@ magmacrunch media is a creative collective that produces music, film, video game
 
 <h3 align="left">what we make</h3>
 
-- **[the arcade](https://magmacrunch.com/arcade/)** — over twenty games you can play in a browser. Board games, card games, puzzles, action games. A few also run in a terminal or on a Wii.
-- **[ware](https://magmacrunch.com/ware/)** — browser tools: a sprite editor, an image signal chain, an album art maker, a media search. This section also documents the engines behind the games.
-- **[the archive](https://magmacrunch.com/archive/)** — recordings, releases, works, places, and the people who made them.
-- **[music](https://magmacrunch.com/music/)** and **[visual](https://magmacrunch.com/visual/)** — records, music videos, and design work.
+- **[the arcade](https://magmacrunch.com/arcade/)**: over twenty games you can play in a browser. Board games, card games, puzzles, action games. A few also run in a terminal or on a Wii.
+- **[ware](https://magmacrunch.com/ware/)**: browser tools, including a sprite editor, an image signal chain, an album art maker and a media search. This section also documents the engines behind the games.
+- **[the archive](https://magmacrunch.com/archive/)**: recordings, releases, works, places, and the people who made them.
+- **[music](https://magmacrunch.com/music/)** and **[visual](https://magmacrunch.com/visual/)**: records, music videos, and design work.
 
 <h3 align="left">install</h3>
 
