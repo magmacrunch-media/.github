@@ -62,6 +62,10 @@ on:
         description: Set true only for a repo whose own pre-commit already does it.
         type: boolean
         default: false
+      skip-tells:
+        description: Set true to leave out the text-tells report for this repo.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -580,4 +584,65 @@ jobs:
           # arriving with one, rather than describing a known backlog.
           if [ "$lines" -lt 15 ]; then
             echo "::warning::AGENTS.md is $lines lines. A stub reads as guidance and is not. Say what the repo is, how to run its checks, and what must be verified rather than assumed."
+          fi
+
+      # LAST, AND RUN EVEN WHEN A CHECK ABOVE FAILED, because it is a report
+      # rather than a gate: a CRLF failure should not also hide the tells.
+      - name: Report text tells on added lines
+        if: ${{ !cancelled() && !inputs.skip-tells && steps.range.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          base='${{ steps.range.outputs.base }}'
+          head='${{ steps.range.outputs.head }}'
+
+          # tools/tells-status.py in THIS repo is a byte-identical copy of
+          # dev\tells-status.py, which lives in the private dev-tree repo that
+          # no consumer can read. Vendored here because .github is public, so
+          # every caller can fetch it with no token. It reports buzzwords,
+          # "not just X", stock filler, colour emoji and &mdash; in prose, in
+          # reader-visible text only, and honours the caller's .tells-ignore,
+          # which it reads from the checked-out root.
+          #
+          # FETCHED INTO RUNNER_TEMP, not checked out into the workspace, so
+          # nothing lands beside the caller's files on a reused MC1 runner.
+          # This repo runs its own copy, so a change to the script and to this
+          # step are tested together on the pull request that makes them.
+          if [ "${{ github.repository }}" = magmacrunch-media/.github ]; then
+            tells=tools/tells-status.py
+          else
+            tells="$RUNNER_TEMP/tells-status.py"
+            curl -fsSL --retry 3 -o "$tells" \
+              https://raw.githubusercontent.com/magmacrunch-media/.github/main/tools/tells-status.py \
+              || { echo "::error::could not fetch tells-status.py; this check examined nothing."; exit 1; }
+          fi
+          head -1 "$tells" | grep -q python \
+            || { echo "::error::$tells is not the script; this check examined nothing."; exit 1; }
+
+          py=
+          for c in python3 python; do
+            if "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' >/dev/null 2>&1; then
+              py=$c; break
+            fi
+          done
+          [ -n "$py" ] || { echo "::error::no Python 3.8+ on this runner; this check examined nothing."; exit 1; }
+
+          out="$("$py" -X utf8 "$tells" --range "$base..$head" 2>&1)"
+          rc=$?
+          printf '%s\n' "$out"
+
+          # EXIT 2 MEANS IT DID NOT READ THE DIFF, the same rule as the em dash
+          # step above: a broken scan cannot read as a clean pass. Any other
+          # non-zero is a crash and is treated the same way.
+          if [ "$rc" != 0 ]; then
+            echo "::error::tells-status.py exited $rc: it did not read the diff, so its silence means nothing."
+            exit 1
+          fi
+
+          # A WARNING, NEVER A FAILURE. Whether "robust" is a tell or the right
+          # word is a judgement no pattern can make, so it is a list for a
+          # person to read.
+          summary="$(printf '%s\n' "$out" | grep '^WARNING: ' | head -1 || true)"
+          if [ -n "$summary" ]; then
+            echo "::warning::Text tells on added lines: ${summary#WARNING: }"
           fi
