@@ -373,6 +373,10 @@ def self_test():
 
 
 def main(argv):
+    # A finding quotes the line, emoji included, and a Windows console is
+    # cp1252: printing one raised, which a hook reads as a failed check.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(errors="backslashreplace")
     mode, rng, trees = "staged", None, []
     it = iter(argv)
     for a in it:
