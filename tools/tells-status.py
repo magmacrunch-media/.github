@@ -47,7 +47,7 @@ EXIT CODES
 This file is pure ASCII: every non-ASCII pattern is written as an escape, so
 it cannot flag itself and nothing can mangle it in transit.
 """
-import io, json, os, re, subprocess, sys, tokenize
+import html, io, json, os, re, subprocess, sys, tokenize
 
 # ---------------------------------------------------------------- patterns --
 
@@ -331,7 +331,10 @@ def scan(path, text, only=None):
         if only is not None and i not in only:
             continue
         for cat, rx in CATEGORIES:
-            for m in rx.finditer(vis):
+            # An emoji written as &#128218; draws the same as the character,
+            # so decode entities for that check. Only for that one: the
+            # entity-dash check needs to see &mdash; as written.
+            for m in rx.finditer(html.unescape(vis) if cat == "emoji" else vis):
                 src = raw[i - 1].strip() if i - 1 < len(raw) else vis
                 found.append((i, cat, m.group(0).strip(), src))
     return found
@@ -353,6 +356,8 @@ def self_test():
          {2, 4}, {1, 3}),
         ("a.py", '"""A robust docstring."""\nx = "robust"  # robust\n', {2}, {1}),
         ("b.js", "a = '" + chr(0x1F0A0) + "';\nb = '" + chr(0x1F0CF) + "';\n", {2}, {1}),
+        ("b.html", "<div>&#128218;</div>\n<div>&#x1F4DA;</div>\n<div>&#9654;</div>\n",
+         {1, 2}, {3}),
     ]
     bad = 0
     for path, text, want, never in cases:
