@@ -1,0 +1,64 @@
+name: Pi uptime
+
+# Checks the Pi's public face from OUTSIDE the tailnet, which nothing else
+# does: the Pi watches MC1, MC1's runners reach the Pi over Tailscale, and a
+# check from either can pass while visitors on the internet get nothing.
+#
+# It lives here because this repo is public, so a hosted runner costs no
+# minutes and sits on the open internet, exactly where a visitor is.
+#
+# Each path is a WebSocket location in nginx-magmacrunch.conf (website repo,
+# arcade/scripts/). A live backend answers a plain GET with 426 Upgrade
+# Required; nginx answers 502 when the backend behind it is down, and curl
+# gets 000 when the Pi or its DNS name is unreachable. So 426 is the pass.
+#
+# A failed run is red, and dev-tree's ci-watch.py reports it in the next
+# morning's digest. If PI_UPTIME_WEBHOOK is set it also posts at once.
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe every public game socket
+        id: probe
+        run: |
+          base=https://magmacrunch.duckdns.org
+          paths="scores counter sorry cribbage stud chess checkers backgammon chinese-checkers parchisi aggravation"
+          down=""
+          n=0
+          for p in $paths; do
+            code=$(curl -s -o /dev/null -m 15 --retry 2 --retry-delay 5 -w '%{http_code}' "$base/$p" || true)
+            n=$((n + 1))
+            if [ "$code" = 426 ]; then
+              echo "ok    $code /$p"
+            else
+              echo "DOWN  $code /$p"
+              down="$down /$p($code)"
+            fi
+          done
+          echo "probed $n paths"
+          [ "$n" -gt 0 ] || { echo "::error::probed nothing"; exit 2; }
+          if [ -n "$down" ]; then
+            echo "down=$down" >> "$GITHUB_OUTPUT"
+            echo "::error::not answering from the internet:$down"
+            exit 1
+          fi
+
+      - name: Post to Discord
+        if: failure() && env.PI_UPTIME_WEBHOOK != ''
+        env:
+          PI_UPTIME_WEBHOOK: ${{ secrets.PI_UPTIME_WEBHOOK }}
+          DOWN: ${{ steps.probe.outputs.down }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq -n --arg c "Pi unreachable from the internet:${DOWN:- (probe step failed)} $RUN" \
+            '{content: $c, flags: 4}' |
+            curl -sf -H 'Content-Type: application/json' -d @- "$PI_UPTIME_WEBHOOK"
