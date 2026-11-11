@@ -586,6 +586,38 @@ jobs:
             echo "::warning::AGENTS.md is $lines lines. A stub reads as guidance and is not. Say what the repo is, how to run its checks, and what must be verified rather than assumed."
           fi
 
+      # The other end of the stub check: AGENTS.md has to fit beside the work.
+      # A local model runs in a 32k window, 24,576 tokens of it input, and
+      # opencode spends about 11,000 before it loads a repo's AGENTS.md
+      # (measured 2026-11-09 by replaying its real first turn to Ollama). At
+      # 76 KB block-island-simulator's left nothing at all, and nanofab's had
+      # grown back to 59 KB after one split. 24,000 bytes, about 6,000 tokens
+      # at four bytes a token, leaves room for about 7,500 of work.
+      #
+      # It warns only when THIS change makes an oversized file bigger, because
+      # appending a section is how both grew; a file already over the line
+      # that a change does not touch says so in the log and stays quiet.
+      - name: AGENTS.md fits a local model's window
+        if: ${{ !cancelled() && steps.range.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          limit=24000
+          base='${{ steps.range.outputs.base }}'
+          head='${{ steps.range.outputs.head }}'
+          [ -f AGENTS.md ] || { echo "no AGENTS.md; the step above reports that."; exit 0; }
+          now="$(git show "$head:AGENTS.md" 2>/dev/null | wc -c || true)"
+          [ "$now" -gt 0 ] || now="$(wc -c < AGENTS.md)"
+          was="$(git show "$base:AGENTS.md" 2>/dev/null | wc -c || true)"
+          echo "AGENTS.md is $now bytes, about $((now / 4)) tokens; $was at $base; limit $limit."
+          if [ "$now" -le "$limit" ]; then
+            echo "Within the limit."
+          elif [ "$base" = "$head" ] || [ "$now" -le "$was" ]; then
+            echo "Over the limit, and this change did not make it bigger."
+          else
+            echo "::warning::AGENTS.md grew to $now bytes, about $((now / 4)) tokens, past the $limit a local model can load with room left to work. Move a subsystem's notes into docs/ and leave one line on the card pointing there."
+          fi
+
       # LAST, AND RUN EVEN WHEN A CHECK ABOVE FAILED, because it is a report
       # rather than a gate: a CRLF failure should not also hide the tells.
       - name: Report text tells on added lines
